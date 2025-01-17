@@ -6,6 +6,7 @@ import pygame
 class Application:
    def __init__(self):
       self.size = self.width, self.height = 640, 480
+      # Point where a random walker starts
       self.startX, self.startY = round(self.width/2), round(self.height/2)
       self.X, self.Y = self.startX, self.startY
 
