@@ -2,10 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
-from numba import jit, prange
+from numba import jit
+
 
 @jit(nopython=True, parallel=True)
-def dla3D(rmin, k):
+def dla3D(rmin, k_cons):
 
     '''
     this function simulates a coral, grown using diffusion limited aggregation
@@ -13,9 +14,9 @@ def dla3D(rmin, k):
     k is the stickiness (determines growth probability)
     '''
 
-    # for a sphere, volumne is proportional to r^3, so rmax = rmin * (d ^ 1/3), where d scales the coral growth's volume
+    # for a sphere, volume is proportional to r^3, so rmax = rmin * (d ^ 1/3), where d scales the coral growth's volume
     d = 3
-    max_iter = 20000
+    max_iter = 50000
     rmax = round(rmin * (d ** (1 / 3)))
 
     # create a 3D grid and initialise it w 0s
@@ -33,7 +34,7 @@ def dla3D(rmin, k):
     # flag to stop the simulation when needed
     terminate = False
 
-    for i in range(max_iter):
+    for _ in range(max_iter):
 
         # random starting position on a sphere around the cluster (so they're all equidistant from the seed)
         # new particle is spawned slightly beyond the growth boundary to give it some buffer zone to random-walk
@@ -64,8 +65,11 @@ def dla3D(rmin, k):
                 A[x, y - 1, z] + A[x, y, z + 1] + A[x, y, z - 1]
             )
 
+            # determine threshold based on height z to make coral tend upwards
+            threshold = k_cons * z + 0.2
+
             # stick the particle if it's near the cluster and satisfies stickiness probability
-            if neighbors > 0 and random.random() < k:
+            if neighbors > 0 and random.random() < threshold:
                 # stop the simulation if the cluster exceeds the limit
                 if (x - m) ** 2 + (y - m) ** 2 + (z) ** 2 >= rmin ** 2:
                     terminate = True
@@ -116,11 +120,11 @@ def dla3D(rmin, k):
 ### simulation ###
 
 # cluster size
-r = 50
-# stickiness
-k = .3
+r = 75
+# stickiness constant
+k_cons = 1/10
 
-mass, A = dla3D(r, k)
+mass, A = dla3D(r, k_cons)
 
 # extract the coordinates of all coral particles
 X, Y, Z = [], [], []
@@ -136,17 +140,20 @@ for i in range(N):
 
 # interactive backend for rotating the 3d grid
 plt.switch_backend('QtAgg')
+
 # plot
 fig = plt.figure(figsize=(10, 10))
 ax = fig.add_subplot(111, projection='3d')
-ax.scatter(X, Y, Z, s=10, c='blue', alpha=0.7)
+ax.scatter(X, Y, Z, s=10, marker='o', c=Z, alpha=0.7)
+
 # m is the midpoint
 m = (len(A) + 1) // 2
 ax.set_xlim([m - r - 2, m + r + 2])
 ax.set_ylim([m - r - 2, m + r + 2])
-ax.set_zlim([0, m + r + 2])
+# set z-axis to max value of z * 1.2
+ax.set_zlim([0, max(Z) * 1.2])
 ax.set_xlabel("X")
 ax.set_ylabel("Y")
 ax.set_zlabel("Z")
-plt.title(f"r={r}, k={k}")
+plt.title(f"r={r}, k constant={k_cons}")
 plt.show()
