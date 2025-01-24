@@ -245,7 +245,7 @@ import porespy as ps
 binary_slices_with_circles = generate_binary_slices_with_circles(cropped_A, axis='z', circle_radius=2)
 
 # Analyze each slice for fractal dimension
-for i, binary_slice in enumerate(binary_slices_with_circles[:15]):  # Analyze the first 15 slices
+for i, binary_slice in enumerate(binary_slices_with_circles[:5]):  # Analyze the first 5 slices
     print(f"Analyzing slice {i + 1}")
     
     # Use the boxcount method
