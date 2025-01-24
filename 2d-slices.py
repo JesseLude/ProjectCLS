@@ -157,6 +157,7 @@ ax.set_zlabel("Z")
 plt.title(f"r={r}, k constant={k_cons}")
 plt.show()
 
+
 def crop_to_occupied_region(A, margin=2):
     """
     Crop the 3D array to the region containing the coral structure.
@@ -183,10 +184,12 @@ def crop_to_occupied_region(A, margin=2):
 cropped_A = crop_to_occupied_region(A)
 
 
-def visualize_slices(A, axis='z', max_slices=10):
+def visualize_slices_with_circles(A, axis='z', max_slices=10, circle_radius=2):
     '''
     This function takes the 3d coral and slices it in 2d images.
     '''
+    from matplotlib.patches import Circle
+
     if axis == 'z':
         slices = [A[:, :, z] for z in range(A.shape[2])]
     elif axis == 'y':
@@ -205,9 +208,15 @@ def visualize_slices(A, axis='z', max_slices=10):
     axes = axes.flatten()
 
     for i, (ax, slice_data) in enumerate(zip(axes, selected_slices)):
-        ax.imshow(slice_data, cmap='Greys', interpolation='nearest')
+        ax.set_xlim(0, slice_data.shape[1])  # Set X-axis limits
+        ax.set_ylim(slice_data.shape[0], 0)  # Set Y-axis limits (invert Y for image-like display)
         ax.axis('off')
         ax.set_title(f"Slice {i * step + 1} (Axis: {axis.upper()})")
+
+        # Draw circles for each occupied pixel
+        for y, x in zip(*np.nonzero(slice_data)):  # Find all non-zero (occupied) pixels
+            circle = Circle((x, y), radius=circle_radius, color='black', alpha=0.7)
+            ax.add_patch(circle)
 
     # Hide any extra subplots
     for ax in axes[len(selected_slices):]:
@@ -216,4 +225,4 @@ def visualize_slices(A, axis='z', max_slices=10):
     plt.tight_layout()
     plt.show()
 
-visualize_slices(cropped_A, axis='z', max_slices=30)
+visualize_slices_with_circles(cropped_A, axis='z', max_slices=30)
