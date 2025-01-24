@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
 from numba import jit
-from skimage.measure import block_reduce
 
 @jit(nopython=True, parallel=True)
 def dla3D(rmin, k_cons):
@@ -184,12 +183,18 @@ def crop_to_occupied_region(A, margin=2):
 cropped_A = crop_to_occupied_region(A)
 
 
-def visualize_slices_with_circles(A, axis='z', max_slices=10, circle_radius=2):
-    '''
-    This function takes the 3d coral and slices it in 2d images.
-    '''
-    from matplotlib.patches import Circle
-
+def generate_binary_slices_with_circles(A, axis='z', circle_radius=2):
+    """
+    Generate binary 2D slices with larger circles representing coral particles.
+    
+    Parameters:
+        A (numpy.ndarray): 3D array representing the coral structure.
+        axis (str): Axis along which to slice ('x', 'y', or 'z').
+        circle_radius (int): Radius of the circle to draw for each coral particle.
+    
+    Returns:
+        List[numpy.ndarray]: List of binary 2D slices with circles.
+    """
     if axis == 'z':
         slices = [A[:, :, z] for z in range(A.shape[2])]
     elif axis == 'y':
@@ -198,31 +203,68 @@ def visualize_slices_with_circles(A, axis='z', max_slices=10, circle_radius=2):
         slices = [A[x, :, :] for x in range(A.shape[0])]
     else:
         raise ValueError("Invalid axis. Choose from 'x', 'y', or 'z'.")
+    
+    binary_slices = []
+    for slice_data in slices:
+        # Create a blank binary image for this slice
+        slice_with_circles = np.zeros_like(slice_data, dtype=np.uint8)
+        
+        # Find all occupied pixels
+        occupied_coords = np.array(np.nonzero(slice_data)).T
+        
+        # Draw a circle for each occupied pixel
+        for y, x in occupied_coords:
+            rr, cc = draw_circle(y, x, circle_radius, slice_with_circles.shape)
+            slice_with_circles[rr, cc] = 1  # Fill the circle in the binary image
+        
+        binary_slices.append(slice_with_circles)
+    
+    return binary_slices
 
-    step = max(1, len(slices) // max_slices)
-    selected_slices = slices[::step][:max_slices]
+def draw_circle(y, x, radius, shape):
+    """
+    Generate the coordinates of a circle centered at (y, x) with the given radius.
+    
+    Parameters:
+        y (int): Y-coordinate of the circle center.
+        x (int): X-coordinate of the circle center.
+        radius (int): Radius of the circle.
+        shape (tuple): Shape of the 2D array (for boundary checks).
+    
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: Row and column indices of the circle's pixels.
+    """
+    from skimage.draw import disk
+    rr, cc = disk((y, x), radius, shape=shape)
+    return rr, cc
 
-    # Plot the slices in a 6x5 grid
-    rows, cols = 6, 5
-    fig, axes = plt.subplots(rows, cols, figsize=(15, 15))
-    axes = axes.flatten()
 
-    for i, (ax, slice_data) in enumerate(zip(axes, selected_slices)):
-        ax.set_xlim(0, slice_data.shape[1])  # Set X-axis limits
-        ax.set_ylim(slice_data.shape[0], 0)  # Set Y-axis limits (invert Y for image-like display)
-        ax.axis('off')
-        ax.set_title(f"Slice {i * step + 1} (Axis: {axis.upper()})")
+import porespy as ps
 
-        # Draw circles for each occupied pixel
-        for y, x in zip(*np.nonzero(slice_data)):  # Find all non-zero (occupied) pixels
-            circle = Circle((x, y), radius=circle_radius, color='black', alpha=0.7)
-            ax.add_patch(circle)
+# Generate binary slices with circles
+binary_slices_with_circles = generate_binary_slices_with_circles(cropped_A, axis='z', circle_radius=2)
 
-    # Hide any extra subplots
-    for ax in axes[len(selected_slices):]:
-        ax.axis('off')
-
+# Analyze each slice for fractal dimension
+for i, binary_slice in enumerate(binary_slices_with_circles[:15]):  # Analyze the first 15 slices
+    print(f"Analyzing slice {i + 1}")
+    
+    # Use the boxcount method
+    data = ps.metrics.boxcount(binary_slice)
+    
+    # Plot the results
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+    ax1.set_yscale('log')
+    ax1.set_xscale('log')
+    ax1.set_xlabel('box edge length')
+    ax1.set_ylabel('number of boxes spanning phases')
+    ax2.set_xlabel('box edge length')
+    ax2.set_ylabel('slope')
+    ax2.set_xscale('log')
+    ax1.plot(data.size, data.count, '-o', label=f'Slice {i + 1}')
+    ax2.plot(data.size, data.slope, '-o', label=f'Slice {i + 1}')
+    
+    ax1.legend()
+    ax2.legend()
     plt.tight_layout()
     plt.show()
 
-visualize_slices_with_circles(cropped_A, axis='z', max_slices=30)
