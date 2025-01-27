@@ -1,8 +1,15 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import random
+import pandas as pd
+import porespy as ps
+import seaborn as sns
+
+from mpl_toolkits.mplot3d import Axes3D
+from sklearn.linear_model import LinearRegression
 from numba import jit
+from scipy.stats import kstest, ttest_ind, mannwhitneyu
 
 @jit(nopython=True, parallel=True)
 def dla3D(rmin, k_cons):
@@ -115,74 +122,6 @@ def dla3D(rmin, k_cons):
 
     return mass, A
 
-### simulation ###
-
-# cluster size
-r = 75
-# stickiness constant
-k_cons = 0.1
-
-mass, A = dla3D(r, k_cons)
-
-# extract the coordinates of all coral particles
-X, Y, Z = [], [], []
-N = len(A)
-for i in range(N):
-    for j in range(N):
-        for l in range(N):
-            if A[i, j, l] == 1:
-                X.append(i)
-                Y.append(j)
-                Z.append(l)
-
-
-# interactive backend for rotating the 3d grid
-plt.switch_backend('QtAgg')
-
-# plot
-fig = plt.figure(figsize=(10, 10))
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(X, Y, Z, s=10, marker='o', c=Z, alpha=0.7)
-
-# m is the midpoint
-m = (len(A) + 1) // 2
-ax.set_xlim([m - r - 2, m + r + 2])
-ax.set_ylim([m - r - 2, m + r + 2])
-# set z-axis to max value of z * 1.2
-ax.set_zlim([0, max(Z) * 1.2])
-ax.set_xlabel("X")
-ax.set_ylabel("Y")
-ax.set_zlabel("Z")
-plt.title(f"r={r}, k constant={k_cons}")
-plt.show()
-
-
-def crop_to_occupied_region(A, margin=2):
-    """
-    Crop the 3D array to the region containing the coral structure.
-
-    Parameters:
-        A (numpy.ndarray): 3D array representing the coral structure.
-
-    Returns:
-        numpy.ndarray: Cropped 3D array.
-    """
-    coords = np.array(np.nonzero(A))  # Find indices of non-zero elements
-    x_min, y_min, z_min = coords.min(axis=1) - margin
-    x_max, y_max, z_max = coords.max(axis=1) + margin + 1  # Include margin and the last occupied index
-
-    # Ensure indices stay within bounds
-    x_min, y_min, z_min = max(0, x_min), max(0, y_min), max(0, z_min)
-    x_max = min(A.shape[0], x_max)
-    y_max = min(A.shape[1], y_max)
-    z_max = min(A.shape[2], z_max)
-
-    return A[x_min:x_max, y_min:y_max, z_min:z_max]
-
-# Crop the array
-cropped_A = crop_to_occupied_region(A)
-
-
 def generate_binary_slices_with_circles(A, axis='z', circle_radius=2):
     """
     Generate binary 2D slices with larger circles representing coral particles.
@@ -238,32 +177,135 @@ def draw_circle(y, x, radius, shape):
     rr, cc = disk((y, x), radius, shape=shape)
     return rr, cc
 
+def crop_to_occupied_region(A, margin=2):
+    """
+    Crop the 3D array to the region containing the coral structure.
 
-import porespy as ps
+    Parameters:
+        A (numpy.ndarray): 3D array representing the coral structure.
 
-# Generate binary slices with circles
-binary_slices_with_circles = generate_binary_slices_with_circles(cropped_A, axis='z', circle_radius=2)
+    Returns:
+        numpy.ndarray: Cropped 3D array.
+    """
+    coords = np.array(np.nonzero(A))  # Find indices of non-zero elements
+    x_min, y_min, z_min = coords.min(axis=1) - margin
+    x_max, y_max, z_max = coords.max(axis=1) + margin + 1  # Include margin and the last occupied index
 
-# Analyze each slice for fractal dimension
-for i, binary_slice in enumerate(binary_slices_with_circles[:5]):  # Analyze the first 5 slices
-    print(f"Analyzing slice {i + 1}")
+    # Ensure indices stay within bounds
+    x_min, y_min, z_min = max(0, x_min), max(0, y_min), max(0, z_min)
+    x_max = min(A.shape[0], x_max)
+    y_max = min(A.shape[1], y_max)
+    z_max = min(A.shape[2], z_max)
 
-    # Use the boxcount method
-    data = ps.metrics.boxcount(binary_slice)
+    return A[x_min:x_max, y_min:y_max, z_min:z_max]
 
-    # Plot the results
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
-    ax1.set_yscale('log')
-    ax1.set_xscale('log')
-    ax1.set_xlabel('box edge length')
-    ax1.set_ylabel('number of boxes spanning phases')
-    ax2.set_xlabel('box edge length')
-    ax2.set_ylabel('slope')
-    ax2.set_xscale('log')
-    ax1.plot(data.size, data.count, '-o', label=f'Slice {i + 1}')
-    ax2.plot(data.size, data.slope, '-o', label=f'Slice {i + 1}')
+def run_simulations(r, k_cons, num_simulations):
+    results = []
+    for sim in range(num_simulations):
+        print(f"Starting simulation {sim + 1}")
 
-    ax1.legend()
-    ax2.legend()
-    plt.tight_layout()
+        # perform the DLA simulation
+        mass, A = dla3D(r, k_cons)
+        cropped_A = crop_to_occupied_region(A)
+        binary_slices_with_circles = generate_binary_slices_with_circles(cropped_A, axis='z', circle_radius=2)
+
+        # analyze each slice for fractal dimension using the boxcount method
+        for i, binary_slice in enumerate(binary_slices_with_circles[:30]):
+            data = ps.metrics.boxcount(binary_slice)
+
+            # perform log-log regression to calculate fractal dimension
+            log_sizes = np.log(data.size)
+            log_counts = np.log(data.count)
+
+            # filter valid data points
+            valid_indices = ~np.isinf(log_sizes) & ~np.isinf(log_counts)
+            log_sizes = log_sizes[valid_indices].reshape(-1, 1)
+            log_counts = log_counts[valid_indices]
+
+            # linear regression is needed to find the slope (fractal dimension)
+            reg = LinearRegression().fit(log_sizes, log_counts)
+            fractal_dimension = -reg.coef_[0]
+
+            # store the results
+            results.append({
+                "Simulation": sim + 1,
+                "Slice": i + 1,
+                "Fractal Dimension": fractal_dimension
+            })
+
+    return results
+
+def visualize_distribution(data, title):
+    plt.figure(figsize=(10, 5))
+    sns.histplot(data, kde=True, bins=20, stat='density', color='skyblue')
+    plt.title(f'Distribution of {title}')
+    plt.xlabel('Fractal Dimension')
+    plt.ylabel('Density')
     plt.show()
+
+    # Q-Q Plot
+    import scipy.stats as stats
+    stats.probplot(data, dist="norm", plot=plt)
+    plt.title(f'Q-Q Plot of {title}')
+    plt.show()
+
+def check_normality(data, title):
+    stat, p = kstest(data, 'norm', args=(np.mean(data), np.std(data)))
+    print(f"Kolmogorov-Smirnov Test: D={stat:.3f}, p={p:.3f}")
+    if p < 0.05:
+        print("Data is NOT normally distributed.")
+    else:
+        print("Data is normally distributed.")
+
+def main():
+    # change the following parameters
+    r = 150
+    k_cons = 0.7
+    num_simulations = 5
+
+    # run the simulations
+    results = run_simulations(r, k_cons, num_simulations)
+
+    # convert results in a pandas dataframe and store as a csv file
+    df = pd.DataFrame(results)
+    df.to_csv("fractal_dimensions_simulations.csv", index=False)
+    print("Fractal dimensions for all simulations have been saved to 'fractal_dimensions_simulations.csv'.")
+
+    # statistical analyis on the data
+    real_life_data = pd.read_csv("real-life-coral-data.csv", encoding='latin1')
+    simulation_data = pd.read_csv("fractal_dimensions_simulations.csv", encoding='latin1')
+
+    # extract fractal dimensions for both datasets
+    real_life_fractal = real_life_data['fractal dimension']
+    simulated_fractal = simulation_data['Fractal Dimension']
+
+    print("Real-Life Data:")
+    print("Mean:", real_life_fractal.mean())
+    print("Standard Deviation:", real_life_fractal.std())
+    print("Range:", real_life_fractal.max() - real_life_fractal.min())
+
+    print("\nSimulated Data:")
+    print("Mean:", simulated_fractal.mean())
+    print("Standard Deviation:", simulated_fractal.std())
+    print("Range:", simulated_fractal.max() - simulated_fractal.min())
+
+    print("Check for normality...")
+    # check if real-life data is normally distributed
+    visualize_distribution(real_life_fractal, "Real-Life Fractal Dimensions")
+    check_normality(real_life_fractal, "Real-Life Fractal Dimensions")
+
+    # check if simulated data is normally distributed
+    visualize_distribution(simulated_fractal, "Simulated Fractal Dimensions")
+    check_normality(simulated_fractal, "Simulated Fractal Dimensions")
+
+    # Perform T-test (parametric) to compare means
+    t_stat, t_p = ttest_ind(real_life_fractal, simulated_fractal, equal_var=False)
+
+    # Perform Mann-Whitney U Test (non-parametric)
+    u_stat, u_p = mannwhitneyu(real_life_fractal, simulated_fractal, alternative='two-sided')
+
+    print(f"T-test: T-statistic = {t_stat}, p-value = {t_p}")
+    print(f"Mann-Whitney U Test: U-statistic = {u_stat}, p-value = {u_p}")
+
+if __name__ == '__main__':
+    main()
