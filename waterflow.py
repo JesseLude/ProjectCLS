@@ -1,4 +1,5 @@
 import random
+import numpy as np
 
 # define parameters
 grid_size = 100
