@@ -23,8 +23,6 @@ the box counting method.
 
 We also made two files for a 2d-simulation, called oop_approach.py and 2d_DLA.py. Thes files gave us a good insight on how DLA works and how we could use it in a 3d simulation.
 
-The file waterflow.py simulates fluid dynamics and water flow interaction with the coral growth model. This might be useful for understanding real-life growth conditions.
-
 main_project_notebook.ipynb is a Jupyter Notebook that contains data analysis and visualization, including:
 
 - Fractal Dimension Analysis: Uses the box-counting method to compare simulation results with real coral structures.
