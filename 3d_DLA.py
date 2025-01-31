@@ -42,72 +42,7 @@ def get_random_direction(weights):
             return directions[i]    
 
 
-@jit(nopython=True, parallel=True)
-def dla3D(rmin, k_cons):
-    """
-    Simulate a coral growth using 3D diffusion-limited aggregation.
-
-    Parameters:
-        rmin (int): Minimum radius defining the region of growth.
-        k_cons (float): Stickiness constant determining growth probability.
-
-    Returns:
-        mass (int): Total number of particles in the coral.
-        A (np.ndarray): 3D grid representing the coral structure.
-    """
-    d = 3
-    rmax = round(rmin * (d ** (1 / 3)))
-    N = 2 * rmax + 3
-    A = np.zeros((N, N, N), dtype=np.int32)
-    m = N // 2  # Initialize the center of the grid
-    A[m, m, 0] = 1  # Location for the seed
-
-    mass = 1
-    terminate = False
-
-    for _ in range(20000):
-        x, y, z = generate_random_position(rmin, m)
-
-        if A[x, y, z] == 1:
-            continue
-
-        while True:
-            neighbors = (
-                A[x + 1, y, z] + A[x - 1, y, z] +
-                A[x, y + 1, z] + A[x, y - 1, z] +
-                A[x, y, z + 1] + A[x, y, z - 1]
-            )
-
-            # Set threshold for stickiness
-            threshold = k_cons * z + 0.2
-            if neighbors > 0 and np.random.rand() < threshold:
-                if (x - m) ** 2 + (y - m) ** 2 + (z) ** 2 >= rmin ** 2:
-                    terminate = True
-
-                A[x, y, z] = 1
-                mass += 1
-
-                for dx, dy, dz in [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]:
-                    nx, ny, nz = x + dx, y + dy, z + dz
-                    if 0 <= nx < N and 0 <= ny < N and 0 <= nz < N and A[nx, ny, nz] == 0:
-                        A[nx, ny, nz] = 1
-
-                break
-
-            # Get random direction and add it to each side
-            direction = get_random_direction(weights=weights)
-            nx, ny, nz = x + direction[0], y + direction[1], z + direction[2]
-
-            if 0 <= nx < N and 0 <= ny < N and 0 <= nz < N:
-                x, y, z = nx, ny, nz
-
-            if (x - m) ** 2 + (y - m) ** 2 + (z) ** 2 > rmax ** 2:
-                break
-
-        if terminate:
-            break
-
-    return mass, A
+# 3d dla
 
 def plot_coral(A, r, k_cons, weights, plot_enabled=True):
     """
