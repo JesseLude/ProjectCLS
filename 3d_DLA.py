@@ -11,13 +11,13 @@ def generate_random_position(rmin, m):
     Generate a random starting position for a particle on a sphere.
     Ensures the particle starts slightly beyond the growth boundary.
     """
-    d = rmin + 2  # Growth boundary buffer
+    d = rmin + 2  # Buffer for the boundary
     theta = np.random.uniform(0, 2 * np.pi)
-    psi = np.arccos(1 - 2 * np.random.rand())  # Uniform sampling on sphere
+    psi = np.arccos(1 - 2 * np.random.rand())
 
     x = m + round(d * np.sin(psi) * np.cos(theta))
     y = m + round(d * np.sin(psi) * np.sin(theta))
-    z = max(0, round(d * np.cos(psi)))  # Ensure z ≥ 0
+    z = max(0, round(d * np.cos(psi)))  # Make sure z is larger than 0
 
     return x, y, z
 
@@ -58,8 +58,8 @@ def dla3D(rmin, k_cons):
     rmax = round(rmin * (d ** (1 / 3)))
     N = 2 * rmax + 3
     A = np.zeros((N, N, N), dtype=np.int32)
-    m = N // 2  # Center of the grid
-    A[m, m, 0] = 1  # Starting seed at the bottom-center
+    m = N // 2  # Initialize the center of the grid
+    A[m, m, 0] = 1  # Location for the seed
 
     mass = 1
     terminate = False
@@ -77,6 +77,7 @@ def dla3D(rmin, k_cons):
                 A[x, y, z + 1] + A[x, y, z - 1]
             )
 
+            # Set threshold for stickiness
             threshold = k_cons * z + 0.2
             if neighbors > 0 and np.random.rand() < threshold:
                 if (x - m) ** 2 + (y - m) ** 2 + (z) ** 2 >= rmin ** 2:
@@ -92,6 +93,7 @@ def dla3D(rmin, k_cons):
 
                 break
 
+            # Get random direction and add it to each side
             direction = get_random_direction(weights=weights)
             nx, ny, nz = x + direction[0], y + direction[1], z + direction[2]
 
@@ -113,8 +115,10 @@ def plot_coral(A, r, k_cons, weights, plot_enabled=True):
     if not plot_enabled:
         return
 
+    # Color in where the particles are
     X, Y, Z = np.where(A == 1)
 
+    # Set dimensions of the plot
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
     ax.scatter(X, Y, Z, s=10, c=Z, alpha=0.7)
@@ -160,6 +164,7 @@ def generate_binary_slices_with_circles(A, axis='z', circle_radius=2):
     Returns:
         List[numpy.ndarray]: List of binary 2D slices with circles.
     """
+    # Can slice in all 3 dimensions
     if axis == 'z':
         slices = [A[:, :, z] for z in range(A.shape[2])]
     elif axis == 'y':
@@ -192,15 +197,14 @@ def analyze_slices(A, axis='z', circle_radius=2, num_slices=5, plot_enabled=True
         circle_radius (int): Radius of the circle to draw for each coral particle.
         num_slices (int): Number of slices to analyze.
         plot_enabled (bool): Whether to plot the analysis results.
-
-    Returns:
-        None
     """
+    
     binary_slices_with_circles = generate_binary_slices_with_circles(A, axis, circle_radius)
     for i, binary_slice in enumerate(binary_slices_with_circles[:num_slices]):
         print(f"Analyzing slice {i + 1}")
         data = ps.metrics.boxcount(binary_slice)
 
+        # Only plot if true, to save time
         if plot_enabled:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
             ax1.set_yscale('log')
@@ -223,7 +227,11 @@ def analyze_slices(A, axis='z', circle_radius=2, num_slices=5, plot_enabled=True
 r = 75
 k_cons = 0.1
 weights = np.array([100, 100, 100, 100, 103, 100])
+
+# Will plot the analysis of different slices if True
 slice_analysis_enabled = True
+
+# Will plot and show the coral if True
 plot_coral_enabled = True
 
 # Run simulation
